@@ -1,0 +1,303 @@
+# EMG
+clc; clear all; close all;
+
+% Setup FT
+% Instruction - set paths to FT toolbox path appropriately
+restoredefaultpath
+addpath([matlabroot,'\toolbox_add_on'])
+addpath('C:\Users\sarat\Dropbox\codes\newCodes')
+addpath([matlabroot,'\toolbox_add_on\fieldtrip-20171231'])
+addpath([matlabroot,'\toolbox_add_on\export_fig'])
+addpath('C:\Users\sarat\Desktop')
+ft_path = [matlabroot,'\toolbox_add_on\fieldtrip-20171231\'];
+
+ft_defaults
+
+%%
+dat_folder ='C:\Users\sarat\Desktop';
+dat_file = 'AB_02_G1_0_1'; %'PD_01_G1_15G';
+
+data=ft_bimExpt_wrapper(fullfile(dat_folder,dat_file), 1200, [2:13], [14,15], 14);
+
+%%
+in_dat = y;
+fs=1200;
+EMG_REREF = [in_dat(2:13,:)- repmat(in_dat(1,:),12,1)];
+ECG_REREF = in_dat(15,:)-in_dat(14,:);
+plot(EMG_REREF','b'),hold on, plot(ECG_REREF', 'r','linewidth', 2)
+title('All chans - EMG (B) ECG(R)'), xlabel('Time (samples)'), ylabel('Amplitude (a.u.)')
+
+data=[];
+data.time = {0:1/fs:((length(in_dat)-1)/fs)};
+data.label = {'EMG1', 'EMG2', 'EMG3', 'EMG4', 'EMG5', ...
+              'EMG6', 'EMG7', 'EMG8', 'EMG9', ...
+              'EMG10', 'EMG11', 'EMG12','ECG' 'STI'};
+data.fsample = fs;          
+data.trial = {[EMG_REREF; ECG_REREF; in_dat(16,:)]};
+
+%% 
+cfg                         = [];
+cfg.lpfilter                = 'yes';
+cfg.lpfreq                  =  150;
+cfg.hpfilter                = 'yes';
+cfg.hpfreq                  =  1;
+cfg.dftfilter               = [50,100,150,200];
+cfg.channel                 =  {'EMG', 'ECG'}; 
+cfg.rectify                 = 'no';
+preproc_data_EMG            = ft_preprocessing(cfg, data);      
+
+cfg            = [];
+cfg.method     = 'runica';
+comp           = ft_componentanalysis(cfg, preproc_data_EMG);
+
+% plot(data_clean.time{1}, comp.trial{1}([1:2],:)'); hold on,
+% plot(data_clean.time{1}, preproc_data_EMG.trial{1}(13,:)./10', 'r', 'linewidth', 1.5); 
+% xlim([50 80])
+% title('Clean data EMG (B) ECG chan (R)' ), xlabel('Time (sec)'), ylabel('Amplitude (a.u.)')
+
+%% 
+% Instruction: 
+% When you open the "comp" data in databrowser in FT, make sure you move to the 
+% 2nd segment and then click on "+" near the vertical tab.. you should clearly 
+% see the ECG artefacts
+cfg          = [];
+cfg.blocksize = 20;
+cfg.viewmode = 'component';
+cfg.layout   = 'CTF275.lay'; % specify the layout file that should be used for plotting
+ft_databrowser(cfg, comp)
+
+%%
+cfg           = [];
+cfg.component = [2,7];
+data_clean    = ft_rejectcomponent(cfg, comp,preproc_data_EMG);
+
+idx = find(y(end,:)==65);
+clf(gcf)
+stem(idx,y(end,idx));
+hold on,plot(y(end,:));
+
+cfg = [];
+trl = [min(idx) max(idx) 0];
+cfg.trl = trl;
+data_trial  = ft_redefinetrial(cfg,data_clean);
+
+clf(gcf)
+plot(data_clean.time{1}, data_clean.trial{1}', 'b'); hold on,
+plot(data_clean.time{1}, preproc_data_EMG.trial{1}(13,:)', 'r', 'linewidth', 1.5); 
+xlim([50 80])
+title('Clean data EMG (B) ECG chan (R)' ), xlabel('Time (sec)'), ylabel('Amplitude (a.u.)')
+
+%%
+chan=4;
+clf(gcf)
+plot(preproc_data_EMG.time{1}, preproc_data_EMG.trial{1}(chan,:),'b'), hold on, 
+plot(data_clean.time{1}, data_clean.trial{1}(chan,:),'r'); xlim([70 80])
+title('EMG Artefact (B) Clean (R)'), xlabel('Time (sec)'), ylabel('Amplitude (a.u.)')
+
+%%
+cfg          = [];
+cfg.viewmode = 'component';
+cfg.blocksize = 20;
+cfg.layout   = 'CTF275.lay'; % specify the layout file that should be used for plotting
+ft_databrowser(cfg, data_clean)
+
+%%
+idx = find(y(end,:)==65);
+clf(gcf)
+stem(idx,y(end,idx))
+hold on,plot(y(end,:))
+
+%%
+cfg = []; cfg.parameter = 'cohspctrm';
+for cond = 1:7
+    for subj = 1:4
+    coh_full_mat(subj,cond,:,:) = coh{subj,cond}.cohspctrm; 
+    pow_full_mat(subj,cond,:,:) = FREQ_EMG.freq_desc{subj,cond}.powspctrm; 
+    rms_full_mat(subj,cond,:) = mean(EMG_RMS.rms{subj,cond}.rms);
+%     coh_GA{cond} = ft_freqgrandaverage(cfg,coh{:,cond});
+    end
+end
+
+avg.coh = squeeze(mean(coh_full_mat));
+avg.pow = squeeze(mean(pow_full_mat));
+avg.rms = squeeze(mean(rms_full_mat));
+
+plot(squeeze(mean(pow_avg([1:7],:,[8:35]),3)'))
+
+%% compute means
+freq_range = [12:30];
+simple_0 = [1,3]; simple_30 = [2,4];
+cmplx_0 = 5; cmplx_30 = 7;
+clear summ_val;
+
+clus_var = {{1,3}, {2,4}, {5}, {7}};
+clus_name = {'simple_0', 'simple_30', 'cmplx_0', 'cmplx_30'};
+vars = {'coh', 'pow', 'rms'};
+ag_muscles = {'EMG_R_Deltiod', 'EMG_R_Triceps', 'EMG_R_Biceps', ...
+              'EMG_L_Deltiod', 'EMG_L_Triceps', 'EMG_L_Biceps', }
+[dimx, dimy]=match_str(coh{1,1}.labelcmb, ag_muscles);
+ag_cmb_coh = find(dimx<46);
+[dimx, dimy]=match_str(FREQ_EMG.freq_desc{1,1}.label, ag_muscles);
+ag_cmb_pow_rms = find(dimx<46);
+
+
+for clusLoop=1:4
+    varLoop=1;
+        summ_val.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],:,freq_range),3),1);
+        summ_val_ag.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],ag_cmb_coh,freq_range),3),1);
+end
+
+for clusLoop=1:4
+    varLoop=2;
+        summ_val.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],:,freq_range),3),1);
+        summ_val_ag.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],ag_cmb_pow_rms,freq_range),3),1);
+end
+
+for clusLoop=1:4
+    varLoop=3;
+        summ_val.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],:),1);
+        summ_val_ag.(vars{varLoop}).(clus_name{clusLoop}) = ...
+                mean(avg.(vars{varLoop})([clus_var{clusLoop}{:}],ag_cmb_pow_rms),1);
+end
+
+
+%%
+
+coh_avg_simple_0 = mean(mean(coh_avg([1,3],:,freq_range),3));
+coh_avg_simple_30 = mean(mean(coh_avg([2,4],:,freq_range),3));
+coh_avg_cmplx_0 = mean(coh_avg([5],:,freq_range),3);
+coh_avg_cmplx_30 =mean(coh_avg([7],:,freq_range),3);
+
+%%
+clf(gcf)
+varLoop=1;
+% for clusLoop=1:4
+    plot(summ_val.(vars{varLoop}).(clus_name{1}), 'b'), hold on
+    plot(summ_val.(vars{varLoop}).(clus_name{2}), '.--b'), hold on
+    plot(summ_val.(vars{varLoop}).(clus_name{3}), 'r'), hold on
+    plot(summ_val.(vars{varLoop}).(clus_name{4}), '.--r'), hold on
+% end
+title([vars{varLoop}])
+legend(clus_name{:})
+
+%% RMS/Coh/Pow - Simple (0,30) vs complex (0,30)
+clrOp1 = rgb('Maroon');%[0.7 0.2 0.2];
+clrOp2 = rgb('SeaGreen');%[0.4 0.4 0.4];
+vars_title = {'Inter-muscular coherence', 'Beta power(12-30 Hz)', 'Muscle output (RMS)'}
+clf(gcf)
+for varLoop=1:3
+    subplot(1,3,varLoop)
+    dat_sel =  [summ_val.(vars{varLoop}).(clus_name{1}),...
+        summ_val.(vars{varLoop}).(clus_name{2})];
+    clus_simple_mean = mean(dat_sel);
+    clus_simple_std= sem(dat_sel);
+    dat_sel =  [summ_val.(vars{varLoop}).(clus_name{3}),...
+        summ_val.(vars{varLoop}).(clus_name{4})];
+    clus_cmplx_mean = mean(dat_sel);
+    clus_cmplx_std = sem(dat_sel);
+%     plot([1 2], [clus_simple,clus_cmplx], '-o'), hold on
+    e2=errorbar([clus_simple_mean,clus_cmplx_mean],...
+        [clus_simple_std,clus_cmplx_std], '-o');
+    set(e2, 'MarkerSize', 6,'Color', clrOp1 , 'MarkerFaceColor', clrOp1 , ...
+    'MarkerEdgeColor', clrOp1);
+    set(e2,'LineWidth', 2 )
+    xlim([0 3])
+    title(vars_title{varLoop})    
+    set(gca,'XTick',[1 2])
+    set(gca,'XTickLabel',{'Simple reach', 'Complex reach'} );
+end
+
+suptitle('Effect of complexity across all muscles (n=4)')
+%FIXME - add individual points
+
+%% RMS/Coh/Pow - effect of elevation - simple/complex
+vars_title = {'Inter-muscular coherence', 'Beta power(12-30 Hz)', 'Muscle output (RMS)'}
+clf(gcf)
+for varLoop=1:3
+    subplot(1,3,varLoop)
+    dat_sel =  [summ_val.(vars{varLoop}).(clus_name{1}),...
+        summ_val.(vars{varLoop}).(clus_name{3})];
+    clus_simple_mean = mean(dat_sel);
+    clus_simple_std= sem(dat_sel);
+    dat_sel =  [summ_val.(vars{varLoop}).(clus_name{2}),...
+        summ_val.(vars{varLoop}).(clus_name{4})];
+    clus_cmplx_mean = mean(dat_sel);
+    clus_cmplx_std = sem(dat_sel);
+%     plot([1 2], [clus_simple,clus_cmplx], '-o'), hold on
+    e2=errorbar([clus_simple_mean,clus_cmplx_mean],...
+        [clus_simple_std,clus_cmplx_std], '-o');
+    set(e2, 'MarkerSize', 6,'Color', clrOp1 , 'MarkerFaceColor', clrOp1 , ...
+    'MarkerEdgeColor', clrOp1);
+    set(e2,'LineWidth', 2 )
+    xlim([0 3])
+    title(vars_title{varLoop})    
+    set(gca,'XTick',[1 2])
+    set(gca,'XTickLabel',{'Elevation 0 deg', 'Elevation 30 deg'} );
+end
+
+suptitle('Effect of elevation across all muscles (n=4)')
+
+%FIXME - add individual points
+
+%% RMS/Coh/Pow - effect of elevation - simple task - only anti-gravity muscles
+vars_title = {'Inter-muscular coherence', 'Beta power(12-30 Hz)', 'Muscle output (RMS)'}
+figure
+clf(gcf)
+dat_plot = summ_val_ag;
+for varLoop=1:3
+    subplot(1,3,varLoop)
+    dat_sel =  [dat_plot.(vars{varLoop}).(clus_name{1})];%,...
+%         dat_plot.(vars{varLoop}).(clus_name{3})];
+    clus_simple_mean = mean(dat_sel);
+    clus_simple_std= sem(dat_sel);
+    dat_sel =  [dat_plot.(vars{varLoop}).(clus_name{2})];%,...
+%         dat_plot.(vars{varLoop}).(clus_name{4})];
+    clus_cmplx_mean = mean(dat_sel);
+    clus_cmplx_std = sem(dat_sel);
+%     plot([1 2], [clus_simple,clus_cmplx], '-o'), hold on
+    e2=errorbar([clus_simple_mean,clus_cmplx_mean],...
+        [clus_simple_std,clus_cmplx_std], '-o');
+    set(e2, 'MarkerSize', 6,'Color', clrOp1 , 'MarkerFaceColor', clrOp1 , ...
+    'MarkerEdgeColor', clrOp1);
+    set(e2,'LineWidth', 2 )
+    xlim([0 3])
+    title(vars_title{varLoop})    
+    set(gca,'XTick',[1 2])
+    set(gca,'XTickLabel',{'Elevation 0 deg', 'Elevation 30 deg'} );
+end
+
+suptitle('Effect of elevation - simple task - anti-gravity muscles (n=4)')
+
+%% RMS/Coh/Pow - effect of elevation - complex task - only anti-gravity muscles
+vars_title = {'Inter-muscular coherence', 'Beta power(12-30 Hz)', 'Muscle output (RMS)'}
+figure
+clf(gcf)
+dat_plot = summ_val_ag;
+for varLoop=1:3
+    subplot(1,3,varLoop)
+    dat_sel =  [dat_plot.(vars{varLoop}).(clus_name{3})];%,...
+%         dat_plot.(vars{varLoop}).(clus_name{3})];
+    clus_simple_mean = mean(dat_sel);
+    clus_simple_std= sem(dat_sel);
+    dat_sel =  [dat_plot.(vars{varLoop}).(clus_name{4})];%,...
+%         dat_plot.(vars{varLoop}).(clus_name{4})];
+    clus_cmplx_mean = mean(dat_sel);
+    clus_cmplx_std = sem(dat_sel);
+%     plot([1 2], [clus_simple,clus_cmplx], '-o'), hold on
+    e2=errorbar([clus_simple_mean,clus_cmplx_mean],...
+        [clus_simple_std,clus_cmplx_std], '-o');
+    set(e2, 'MarkerSize', 6,'Color', clrOp1 , 'MarkerFaceColor', clrOp1 , ...
+    'MarkerEdgeColor', clrOp1);
+    set(e2,'LineWidth', 2 )
+    xlim([0 3])
+    title(vars_title{varLoop})    
+    set(gca,'XTick',[1 2])
+    set(gca,'XTickLabel',{'Elevation 0 deg', 'Elevation 30 deg'} );
+end
+
+suptitle('Effect of elevation - complex task - anti-gravity muscles (n=4)')
