@@ -1,0 +1,57 @@
+# EMG
+function[data] = ft_bimExpt_wrapper(filename, fs, label_list, emg_chans, ecg_chans, stim_chans)
+    %% Wrapper function for gTec g.HiAmp data to be compatible for FT
+    % Output data struct is FT compatible !!!
+    % ECG, EMG channels are already re-referenced to Channel #1
+    % EMG channels assigned generic names
+    %[data] = ft_bimExpt_wrapper(filename, fs, emg_chans, ecg_chans, stim_chans)
+    % filename: Filename with full path
+    % fs: Sampling frequency (Hz); default: 1200 Hz
+    % emg_chans: position list of all EMG chans; default = [2:13] 
+    %   Note: This is a list of all EMG channels
+    % ecg_chans: position list of all EMG chans; default = [14,15] 
+    %   Note: This is an array
+    % stim_chans: stimulus recording channels; default:16
+    % eg. data=ft_bimExpt_wrapper('PD1_SS_01', 1200, [2:13], [14,15], 16);
+    disp(sprintf('Arg inputs: %d',nargin));
+%     if nargin < 1
+%         disp('Enter filename')
+%         return
+%     elseif nargin<7 % FIXME
+%         disp('Enter all details')
+%         return
+%         fs=1200;
+%         emg_chans = [3:12];
+%         ecg_chans = [13 14];
+%         ref_chan = 15;
+%         stim_chans = 16;
+%         disp('## Setting fs=1200')
+%         disp('## Setting EMG range from chan #3-12, ECG rage as #13-14, ref_chans as #15, STIM as #16')
+%         
+%     elseif nargin<5 
+%         emg_chans = [3:12];
+%         ecg_chans = [13 14];
+%         ref_chan = 15;
+%         stim_chans = 16;
+%         disp('## Setting fs=1200')
+%         disp('## Setting EMG range from chan #3-12, ECG rage as #13-14, ref_chans as #15, STIM as #16')
+%     end
+%     
+    try 
+        load(fullfile(filename))
+    catch
+        disp('Enter filename with full path')
+    end
+    in_dat = y; % FIXME - convert to volts/mV
+    EMG = in_dat(emg_chans,:); %- repmat(in_dat(ref_chan,:),length(emg_chans),1)];
+    ECG = in_dat(ecg_chans,:); %-in_dat(ecg_chans(2),:);
+
+    data=[];
+    data.time = {in_dat(1,:)}; %{0:1/fs:((length(in_dat)-1)/fs)};
+    data.label = label_list;
+    data.fsample = fs;          
+    data.trial = {[EMG; ECG; in_dat(stim_chans,:)]};
+    disp(sprintf('Chans %d to %d are EMG channels', emg_chans(1), emg_chans(end)))
+    disp(sprintf('Chans %d is ECG channels', ecg_chans))
+    disp(sprintf('Chans %d is stim channel', 16))
+return
