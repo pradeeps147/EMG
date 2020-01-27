@@ -1,0 +1,91 @@
+# EMG
+clc; clear all; close all; 
+% Setup FT
+
+restoredefaultpath
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\fieldtrip-20171231')
+addpath('C:\Users\USER\Documents\MATLAB')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\export_fig')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\CMC')
+ft_defaults
+
+
+%%
+dat_folder ='C:\Users\USER\Documents\MATLAB\Bimanual Experiment\gtec_EMG_data';
+        dat_file = 'AB_04_7.mat'; %'PD_01_G1_15G'; 
+
+        label_list = {'EMG_R_Deltiod', 'EMG_R_Triceps', 'EMG_R_Biceps', 'EMG_R_FDS', 'EMG_R_ED', ...
+                      'EMG_L_Deltiod', 'EMG_L_Triceps', 'EMG_L_Biceps', 'EMG_L_FDS', 'EMG_L_ED', ...
+                      'ECG', 'STI'};
+
+        data = ft_bimExpt_wrapper(fullfile(dat_folder,dat_file), 1200, label_list, [3:12], 13, 16);
+        
+        
+preproc_data_EMG = load('C:\Users\USER\Documents\MATLAB\Bimanual Experiment\gtec_EMG_data_ft\AB_04_7.mat');
+preproc_data_EMG = preproc_data_EMG.preproc_data_EMG;
+
+ 
+cfg            = [];
+cfg.method     = 'runica';
+comp           = ft_componentanalysis(cfg, preproc_data_EMG);
+
+cfg          = [];
+cfg.blocksize = 20;
+cfg.viewmode = 'component';
+cfg.layout   = 'CTF275.lay'; % specify the layout file that should be used for plotting
+ft_databrowser(cfg, comp)
+
+%%
+cfg           = [];
+cfg.component = [1,3];
+cfg.channels  = {'all','-STI'};
+data_clean    = ft_rejectcomponent(cfg, comp,preproc_data_EMG);
+data_clean.trial{1, 1}(12,:) = data.trial{1, 1}(12,:); 
+clf(gcf)
+plot(data_clean.time{1}, preproc_data_EMG.trial{1}(match_str(preproc_data_EMG.label, 'ECG'),:)', 'r', 'linewidth', 1); hold on
+plot(data_clean.time{1}, data_clean.trial{1}', 'b'); 
+xlim([50 80])
+title('Clean data EMG (B) ECG chan (R)' ), xlabel('Time (sec)'), ylabel('Amplitude (a.u.)')
+
+
+cfg          = [];
+cfg.viewmode = 'component';
+cfg.blocksize = 10;
+cfg.layout   = 'CTF275.lay'; % specify the layout file that should be used for plotting
+ft_databrowser(cfg, data_clean)
+
+
+%%
+ %Trial definition - arbitrary - does not use kinematic data
+% Trial definition in sample nos. NOT in TIME!!!
+%trl         = [];
+%extracting the activity (trigger data)
+        idx = find(data.trial{1, 1}(end,:)==65);
+        clf(gcf)
+        stem(idx,data.trial{1, 1}(end,idx));
+        hold on,plot(data.trial{1, 1}(end,:));
+
+        cfg = [];
+        trl = [min(idx) max(idx) 0];
+        cfg.trl = trl;
+        data_trial  = ft_redefinetrial(cfg,data_clean);
+
+
+%trl1         = [(0:data_trial.fsample:length(data_trial.trial{1})-data_trial.fsample)' (data_trial.fsample:data_trial.fsample:length(data_trial.trial{1}))'];
+% a = ((data_trial.sampleinfo(1)):1200:(data_trial.sampleinfo(2))-1200);
+% b = ((data_trial.sampleinfo(1))+1200:1200:(data_trial.sampleinfo(2)));
+trl1 = [((data_trial.sampleinfo(1))-1:1200:(data_trial.sampleinfo(2))-1200)' ((data_trial.sampleinfo(1))+1200-1:1200:(data_trial.sampleinfo(2)))'];
+%trl         = [((preproc_data_EMG.sampleinfo(1)):1200:(preproc_data_EMG.sampleinfo(2))-1200); (1200:1200:(preproc_data_EMG.sampleinfo(2)))];
+trl1(:,1)    = trl1(:,1)+1;
+trl1(:,3)    = 0;    % [fs.*size(trl,1)]';
+
+cfg = [];
+cfg.trl = trl1;
+cfg.channel = {'all'};
+
+data_epoched = ft_redefinetrial(cfg, data_trial);
+
+cd('C:\Users\USER\Documents\MATLAB\Bimanual Experiment\gtec_EMG_data_ft_epoch');
+save AB_04_7 data_epoched
+close all 
