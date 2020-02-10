@@ -1,0 +1,102 @@
+clc; clear all; close all; 
+restoredefaultpath
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\fieldtrip-20171231')
+addpath('C:\Users\USER\Documents\MATLAB')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\export_fig')
+addpath('C:\Program Files\MATLAB\R2019a\toolbox_add_on\CMC')
+ft_defaults
+
+
+%%
+proc.data_folder    = 'C:\Users\USER\Documents\MATLAB\Bimanual Experiment\gtec_EMG_data_ft_epoch';
+proc.results_folder = 'C:\Users\USER\Documents\MATLAB\Bimanual Experiment\gtec_EMG_results';
+
+mkdir(proc.results_folder)
+cd(proc.data_folder)
+filenames   = dir('*.mat');
+
+subject = {'AB_01', 'AB_02', 'AB_03', 'AB_04'};
+condition = {'_circle_0', '_circle_30', '_star_0', '_star_30', '_randomGame_0', '_randomGame_15', '_randomGame_30'};
+a=0;
+for subjLoop = 1: length(subject)
+    for condLoop = 1:length(condition)
+        a = a +1;
+        file_sub{subjLoop,condLoop} = {filenames(a).name};
+        
+        data = load(string(file_sub{subjLoop,condLoop}));  
+        data_epoched1 = data.data_epoched;
+        data_epoched{subjLoop,condLoop}              = data_epoched1;
+        data_epoched{subjLoop,condLoop}.filename     = string(strcat(subject(subjLoop),condition(condLoop),'.mat'));  %string(file_sub{subjLoop,condLoop});
+    end
+end
+
+
+
+%%
+for subjLoop=1:length(subject)
+    for condLoop = 1:length(condition)
+        
+
+        
+%        %RMS Calculation 
+%        AvgChan = squeeze(sqrt(mean(data.^2, 1)));
+%         rmsemg{subjLoop,condLoop} = (sqrt(mean((data_epoched.trial{1, 1}(1,:)).^2)));
+%         rmsemg{subjLoop,condLoop}.filename     = file_sub{subjLoop,condLoop};
+        
+        % Power calculation
+        cfg                     = [];
+        cfg.output              = 'powandcsd';
+        cfg.method              = 'mtmfft';
+        cfg.taper               = 'hanning';
+        cfg.foi                 = [1:1:150];
+        cfg.keeptrials          = 'yes';
+        cfg.channel = 'EMG';
+        freq_fourier{subjLoop,condLoop}              = ft_freqanalysis(cfg, data_epoched{subjLoop,condLoop});
+        freq_fourier{subjLoop,condLoop}.filename     = string(strcat(subject(subjLoop),condition(condLoop),'.mat'));  %string(file_sub{subjLoop,condLoop});
+
+        cfg                             = [];
+        cfg.method                      = 'coh';
+        cfg.channelcmb                  = {'EMG', 'EMG'};
+        cfg.jackknife                   = 'yes';
+        coh{subjLoop,condLoop}          = ft_connectivityanalysis(cfg, freq_fourier{subjLoop,condLoop});
+        coh{subjLoop,condLoop}.filename = string(strcat(subject(subjLoop),condition(condLoop),'.mat'));  %string(file_sub{subjLoop,condLoop});
+        cfg                      = [];
+        cfg.jackknife            = 'yes';
+        freq_desc{subjLoop,condLoop}          = ft_freqdescriptives(cfg,  freq_fourier{subjLoop,condLoop});
+        freq_desc{subjLoop,condLoop}.filename = string(strcat(subject(subjLoop),condition(condLoop),'.mat')); %string(file_sub{subjLoop,condLoop});
+        
+%         freq_cmb{subjLoop,condLoop}  = ft_combineplanar([],freq_desc{subjLoop,condLoop});
+%         freq_cmb{subjLoop,condLoop}.filename = file_sub{subjLoop,condLoop};
+
+        % Stability
+        cfg                 = [];
+        cfg.medianfilter    = 'yes';
+        cfg.medianfiltord   = 50;
+        cfg.channel         = 'EMG';
+        EMG_ch              = ft_preprocessing(cfg, data_epoched{subjLoop,condLoop});
+        
+        for trialLoop=1:length(EMG_ch.trial)
+%             stab(trialLoop,:) = 1-(std(EMG_ch.trial{trialLoop})/mean(EMG_ch.trial{trialLoop}));
+            rmsVal(trialLoop,:) = sqrt(mean(EMG_ch.trial{trialLoop}.^2,2));
+        end
+        
+        
+        rms{subjLoop,condLoop}.rms           = rmsVal;
+        rms{subjLoop,condLoop}.filename      = string(strcat(subject(subjLoop),condition(condLoop),'.mat')); %string(file_sub{subjLoop,condLoop});
+%         rms(subjLoop,condLoop)           = mean(stab);
+%         rms(subjLoop,condLoop)            = std(stab);
+             
+    end
+end
+
+EMG_RMS = rms; 
+
+
+FREQ_EMG.freq_desc = freq_desc;
+FREQ_EMG.freq_fourier = freq_fourier;
+
+cd(proc.results_folder)
+save IMC coh 
+save power FREQ_EMG
+save RMS EMG_RMS
